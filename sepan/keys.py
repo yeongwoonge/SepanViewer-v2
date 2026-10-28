@@ -6,6 +6,11 @@ DEFAULT_8_BINDINGS={'A':'LShift','1':'A','2':'S','3':'D','L':'Space','R':'RAlt',
                     '4':'K','5':'L','6':';','B':'RShift'}
 
 
+def mode_shortcut(vk,control_down,alt_down):
+    """Mode changes are explicit and never infer the chart from played keys."""
+    return str(vk-0x30) if control_down and alt_down and vk in (0x34,0x35,0x36,0x38) else None
+
+
 @dataclass(frozen=True)
 class Binding:
     kind: str

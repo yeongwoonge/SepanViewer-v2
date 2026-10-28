@@ -141,7 +141,13 @@ def render_svg(state,labels=None):
                              f'font-family="Fixedsys, Courier New, monospace" font-size="{font_size}" fill="{color}">'
                              f'{escape(display)}</text>')
         parts.append('</g>')
-    parts.append('</svg>')
+    parts.append('<g data-reference="guides" shape-rendering="crispEdges">')
+    for offset,color,weight in ((-42,'#E2CA8A',2),(42,'#E2CA8A',2),(0,'#FFFFFF',3)):
+        y=center+offset+.5
+        if 0<=y<height:
+            parts.append(f'<path d="M0 {y:g} H51" stroke="black" stroke-width="{weight+2}"/>')
+            parts.append(f'<path d="M0 {y:g} H51" stroke="{color}" stroke-width="{weight}"/>')
+    parts.append('</g></svg>')
     return ''.join(parts)
 
 

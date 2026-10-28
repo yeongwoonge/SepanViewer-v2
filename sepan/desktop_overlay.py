@@ -12,6 +12,7 @@ from . import APP_NAME
 
 
 GEAR_SIZE_RATIO=.8
+REFERENCE_GOLD=(226,202,138,255)
 
 
 def read_layout(path):
@@ -89,8 +90,15 @@ def render_overlay(state,scale=2,labels=None,editing=False):
         opacity=max(0.,min(1.,marker['opacity']))
         group.putalpha(group.getchannel('A').point(lambda a:round(a*opacity)))
         image=Image.alpha_composite(image,group)
+    # References stay above input labels and do not fade with input history.
+    ink=ImageDraw.Draw(image)
+    for y,color,weight in ((center-42,REFERENCE_GOLD,2),(center+42,REFERENCE_GOLD,2),
+                           (center,(255,255,255,255),3)):
+        if 0<=y<height:
+            ink.line((0,y,50,y),fill=(0,0,0,255),width=weight+2)
+            ink.line((0,y,50,y),fill=color,width=weight)
     if editing:
-        ImageDraw.Draw(image).rectangle((0,0,50,height-1),outline='#A9C5E8')
+        ink.rectangle((0,0,50,height-1),outline='#A9C5E8')
     return image.resize((width*scale,height*scale),Image.Resampling.NEAREST)
 
 
@@ -101,12 +109,10 @@ def render_gear_overlay(state,scale=2,editing=False):
     if editing:draw.rectangle((0,0,width-1,height-1),fill=(16,21,30,190),outline=(169,197,232,255))
     draw.line((0,30,width-1,30),fill=(0,0,0,220),width=3)
     draw.line((0,30,width-1,30),fill=(160,166,176,210))
-    for bound,alpha in ((21,100),(42,210)):
+    for bound,alpha in ((21,100),):
         for sign in (-1,1):
             x=half+sign*bound
             if 0<=x<width:draw.line((x,23,x,38),fill=(175,180,190,alpha))
-    draw.line((half,19,half,41),fill=(0,0,0,255),width=3)
-    draw.line((half,19,half,41),fill=(255,255,255,255))
     latest=None
     for marker in state['markers']:
         error=marker['error']
@@ -120,7 +126,20 @@ def render_gear_overlay(state,scale=2,editing=False):
     if latest is not None:
         x=round(half+latest['error']);draw=ImageDraw.Draw(image)
         indicator='#FF4646' if latest.get('late',latest['error']>42) else ('#4696FF' if latest.get('early',latest['error'] < -42) else '#D7DCE4')
-        draw.polygon(((x,23),(x-3,18),(x+3,18)),fill=indicator,outline='black')
+        draw.polygon(((x,8),(x-4,2),(x+4,2)),fill=indicator,outline='black')
+    # Longer capped guides read as fixed landmarks, not another keypress.
+    draw=ImageDraw.Draw(image)
+    for offset,top,bottom,color,cap in ((-42,15,44,REFERENCE_GOLD,3),
+                                      (42,15,44,REFERENCE_GOLD,3),
+                                      (0,10,47,(255,255,255,255),4)):
+        x=half+offset
+        if not 0<=x<width:continue
+        draw.line((x,top,x,bottom),fill=(0,0,0,255),width=4)
+        for y in (top,bottom):
+            draw.line((x-cap,y,x+cap,y),fill=(0,0,0,255),width=4)
+        draw.line((x,top,x,bottom),fill=color,width=2)
+        for y in (top,bottom):
+            draw.line((x-cap,y,x+cap,y),fill=color,width=2)
     return image.resize((max(1,round(width*scale)),max(1,round(height*scale))),Image.Resampling.NEAREST)
 
 

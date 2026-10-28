@@ -39,6 +39,7 @@ def main(on_ready=None):
             self.root.geometry('860x300');self.root.minsize(820,280)
             self.origin = time.perf_counter_ns()
             self.processes=[]; self.running=False; self.logfile=None; self.jsonfile=None
+            self.pending_mode_change=None
             self.history=[]; self.cfg=Config()
             self.round_buffer=RoundBuffer();self.round_cutoff=-1;self.round_meta=None
             self.result_since=None
@@ -237,6 +238,13 @@ def main(on_ready=None):
                 load(temp);temp.replace(ROOT/'config.ini');self.apply_config()
             except Exception as error:messagebox.showerror('버튼 수 변경 실패',str(error),parent=self.root)
 
+        def apply_mode_shortcut(self):
+            mode=self.pending_mode_change;self.pending_mode_change=None
+            if mode is None or mode==self.cfg.mode:return
+            self.mode_value.set(mode)
+            self.choose_mode()
+            if self.cfg.mode==mode:self.write(f'CONFIG — {mode}키로 전환했습니다. Ctrl+Alt+4/5/6/8')
+
         def finish_round(self,reason,cutoff=None,show=False,result_image=None):
             cutoff=(time.perf_counter_ns()-self.origin)/1e6 if cutoff is None else cutoff
             if self.running and hasattr(self,'engine'):
@@ -420,6 +428,11 @@ def main(on_ready=None):
             elif kind=='result_screen':
                 if event[1]>self.round_cutoff:
                     self.finish_round('결과 화면 감지',cutoff=event[1],result_image=event[2])
+            elif kind=='mode_request':
+                if event[2] not in ('4','5','6','8'):return
+                # Restart after the old queues finish draining, not inside poll().
+                if self.pending_mode_change is None:self.root.after_idle(self.apply_mode_shortcut)
+                self.pending_mode_change=event[2]
             elif kind=='inactive':
                 self.record_pending(event[1] if len(event)>1 else float('inf'))
                 self.engine.reset();self.key_backlog=[]

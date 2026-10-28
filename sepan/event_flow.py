@@ -8,8 +8,8 @@ def drain_ordered(sources,limit=512):
         for _ in range(limit):
             try:events.append(source.get_nowait())
             except Empty:break
-    timestamped={'frame','key','result_candidate','result_screen','inactive'}
-    priority={'frame':0,'key':1,'result_candidate':2,'result_screen':3,'inactive':4}
+    timestamped={'frame','key','result_candidate','result_screen','inactive','mode_request'}
+    priority={'frame':0,'key':1,'result_candidate':2,'result_screen':3,'inactive':4,'mode_request':5}
     def key(item):
         index,event=item
         timed=event[0] in timestamped and len(event)>1

@@ -21,6 +21,7 @@ class RAWKEYBOARD(C.Structure):
 def input_worker(events,stop,target_hwnd,origin_ns):
     import win32gui
     import win32api
+    from .keys import mode_shortcut
     user = C.WinDLL('user32',use_last_error=True)
     user.RegisterRawInputDevices.argtypes = [C.POINTER(RAWINPUTDEVICE),W.UINT,W.UINT]
     user.RegisterRawInputDevices.restype = W.BOOL
@@ -52,7 +53,9 @@ def input_worker(events,stop,target_hwnd,origin_ns):
                     elif vk != 255 and key.MakeCode != 255 and token not in pressed:
                         pressed.add(token)
                         if win32gui.GetForegroundWindow() == target_hwnd:
-                            events.put(('key',timestamp,vk,scan))
+                            mode=mode_shortcut(vk,user.GetAsyncKeyState(0x11)&0x8000,
+                                               user.GetAsyncKeyState(0x12)&0x8000) if vk in (0x34,0x35,0x36,0x38) else None
+                            events.put(('mode_request',timestamp,mode) if mode else ('key',timestamp,vk,scan))
             except Exception:
                 events.put(('error','Raw Input: '+traceback.format_exc()))
                 stop.set()
