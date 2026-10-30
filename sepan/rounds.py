@@ -64,7 +64,8 @@ def summarize(rows,metadata):
         unit=float(metadata.get('judgement_unit_ms',1))
         errors=[r.get('analysis_error_ms',r['press']-r['due']) for r in normal
                 if r.get('press') is not None and r.get('due') is not None]
-        windows={name:maximum_window_candidate(errors,current,width,unit) for name,width in (('normal',42),('hard',21))}
+        from .recommendation import recommend_window
+        windows={name:recommend_window([errors],current,width,unit) for name,width in (('normal',42),('hard',21))}
     candidates={current-1,current,current+1}|{value['recommended_setting'] for value in windows.values() if value}
     return {'schema':3,'metadata':metadata,'counts':counts,'normal':stats,'all':timing_stats(rows),
             'normal_screen':timing_stats(normal,'screen_error_ms'),

@@ -9,11 +9,12 @@ def measurement_context(summary,cfg):
 
 
 def recommendation_lines(summary,comparison=None):
+    from .recommendation import recommendation_status
     lines=[]
     for name,label in (('normal','노말 ±42ms'),('hard','하드 ±21ms')):
         candidate=summary['advice'].get('window_candidates_unverified',{}).get(name)
         if candidate:
-            lines.append(f"{label}: 게임 판정 예상 후보 {candidate['recommended_setting']} · 범위 내 {candidate['inside_current']} → {candidate['inside_candidate']} / {candidate['samples']}개")
+            lines.append(f"{label}: 게임 판정 예상 후보 {candidate['recommended_setting']} · {recommendation_status(candidate)} · 범위 내 {candidate['inside_current']} → {candidate['inside_candidate']} / {candidate['samples']}개")
     if comparison:lines.append(f"실제 RATE 비교 후보 {comparison['recommended_setting']}")
     return lines or ['예상 후보: 측정 데이터 부족 또는 불안정']
 

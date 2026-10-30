@@ -43,6 +43,7 @@ def main(on_ready=None):
             self.history=[]; self.cfg=Config()
             self.round_buffer=RoundBuffer();self.round_cutoff=-1;self.round_meta=None
             self.result_since=None
+            self.result_preview=None
             self.report_executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='round-report')
             self.report_jobs=[];self.records_root=ROOT/'records'
             self.records_root.mkdir(exist_ok=True)
@@ -259,6 +260,7 @@ def main(on_ready=None):
             if payload:payload['summary']['metadata']['excluded_future_observations']=len(self.round_buffer.rows)
             self.round_buffer.rows=[]
             self.round_cutoff=max(self.round_cutoff,cutoff);self.round_meta=None
+            self.result_preview=None
             self.viewer_state.clear()
             if reason.startswith('F5'):
                 self.result_since=None
@@ -433,7 +435,9 @@ def main(on_ready=None):
             if kind=='error':raise RuntimeError(event[1])
             if kind=='info':self.write('INFO — '+event[1])
             elif kind=='result_candidate':
-                if event[1]>self.round_cutoff:self.result_since=event[1] if event[2] else None
+                if event[1]>self.round_cutoff:
+                    self.result_since=event[1] if event[2] else None
+                    self.result_preview=event[3] if event[2] and len(event)>3 else None
             elif kind=='result_screen':
                 if event[1]>self.round_cutoff:
                     self.finish_round('결과 화면 감지',cutoff=event[1],result_image=event[2])
@@ -465,6 +469,8 @@ def main(on_ready=None):
                 _,t,vk,scan=event
                 if t<=self.round_cutoff:return
                 if vk==0x74:
+                    if self.result_since is not None and self.result_preview and Path(self.result_preview).is_file():
+                        self.finish_round('결과 화면 감지',cutoff=self.result_since,result_image=self.result_preview)
                     self.finish_round('F5 재시작',cutoff=t);return
                 if self.result_since is not None and t>=self.result_since:return
                 if self.diagnostics.get():self.write(f'KEY vk{vk:02X} sc{scan:03X} at {t:.3f}ms')

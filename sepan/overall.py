@@ -4,7 +4,8 @@ import math
 import statistics
 from pathlib import Path
 
-from .rounds import error_stats,maximum_window_candidate,normal_lanes
+from .rounds import error_stats,normal_lanes
+from .recommendation import recommend_window,recommendation_status
 from .result_archive import recorded_time_key
 
 
@@ -21,7 +22,7 @@ def same_measurement_conditions(meta,cfg):
 def collect_overall(records_root,mode,cfg):
     mode=int(mode)
     if mode not in (4,5,6,8):raise ValueError('지원하지 않는 버튼 수입니다.')
-    lanes=normal_lanes(mode);errors=[];per_round=[];eligible_errors=[];eligible_rounds=0
+    lanes=normal_lanes(mode);errors=[];per_round=[];eligible_errors=[];eligible_rounds=0;eligible_groups=[]
     skipped=0;empty=0;invalid_rows=0
     for path in sorted(Path(records_root).rglob('summary.json')):
         try:
@@ -59,13 +60,14 @@ def collect_overall(records_root,mode,cfg):
         per_round.append({'order':stamp,'recorded_at':summary.get('saved_at',path.parent.name),
                           'count':len(round_errors),'mean_ms':mean,
                           'game_judgement':meta.get('game_judgement',0)})
-        if adjusted:eligible_errors.extend(adjusted);eligible_rounds+=1
+        if adjusted:eligible_errors.extend(adjusted);eligible_rounds+=1;eligible_groups.append((stamp,adjusted))
     per_round.sort(key=lambda item:item['order'])
     windows={}
     if eligible_rounds>=2 and len(eligible_errors)>=100 and statistics.pstdev(eligible_errors)<=30:
-        windows={name:maximum_window_candidate(eligible_errors,int(cfg.timing.gameJudgement),width,cfg.timing.judgementUnitMs)
+        groups=[group for stamp,group in sorted(eligible_groups,key=lambda item:item[0])]
+        windows={name:recommend_window(groups,int(cfg.timing.gameJudgement),width,cfg.timing.judgementUnitMs)
                  for name,width in (('normal',42),('hard',21))}
-    return {'schema':1,'mode':mode,'round_count':len(per_round),'normal':error_stats(errors),
+    return {'schema':2,'mode':mode,'round_count':len(per_round),'normal':error_stats(errors),
             'per_round_mean_ms':statistics.mean(item['mean_ms'] for item in per_round) if per_round else None,
             'errors':errors,'per_round':per_round,'skipped_records':skipped,'empty_records':empty,
             'invalid_rows':invalid_rows,'recommendation_rounds':eligible_rounds,
@@ -122,8 +124,10 @@ def plot_overall(data,path):
     parts=[]
     for key,label in (('normal','노말 ±42ms'),('hard','하드 ±21ms')):
         candidate=data['recommendations'].get(key)
-        if candidate:parts.append(f"{label}  {candidate['recommended_setting']}  ({candidate['inside_current']:,} → {candidate['inside_candidate']:,}개)")
-    text(.06,.09,'   /   '.join(parts) if parts else '추천 보류 · 현재 조건에서 안정적인 2판·100입력 이상 필요',fontsize=12)
+        if candidate:parts.append(f"{label} {candidate['recommended_setting']} · {recommendation_status(candidate)} ({candidate['inside_current']:,} → {candidate['inside_candidate']:,}개)")
+    if parts:
+        for i,part in enumerate(parts):text(.06,.09-i*.04,part,fontsize=12)
+    else:text(.06,.09,'추천 보류 · 현재 조건에서 안정적인 2판·100입력 이상 필요',fontsize=12)
     target=Path(path);target.parent.mkdir(parents=True,exist_ok=True)
     pending=target.with_name(target.stem+'.pending.png')
     try:fig.savefig(pending,facecolor=bg);pending.replace(target)

@@ -46,12 +46,12 @@ def capture_worker(events,stop,snapshot,target_hwnd,origin_ns,cfg,session_dir,re
         lane_left=cfg.gearLeft if personal else 720
         region = (round(w*lane_left/1920),0,round(w*(lane_left+480)/1920),round(h*roi_h/1080))
         capture_rect=(left+region[0],top+region[1],left+region[2],top+region[3])
-        is_result=False;pending_result_image=''
+        is_result=False;pending_result_image='';pending_quality=-1.;pending_capture_t=0.;pending_level=0.;refreshed_candidate=False
         if personal:
-            from .result_screen import ResultScreenDetector,ResultLatch,ProbeSchedule,ANCHORS
+            from .result_screen import ResultScreenDetector,ResultLatch,ResultAppearance,result_brightness,ProbeSchedule,ANCHORS
             from .screen_regions import ScreenRegionSampler
             try:
-                result_detector=ResultScreenDetector();result_latch=ResultLatch()
+                result_detector=ResultScreenDetector();result_latch=ResultLatch();appearance=ResultAppearance()
                 probe_schedule=ProbeSchedule(cfg.resultPollHz)
                 probe=ScreenRegionSampler([rect for _,rect in ANCHORS],info['Monitor'])
                 events.put(('info',f'Result probe: 2 small regions, {cfg.resultPollHz:g} Hz; no full-screen analysis'))
@@ -60,6 +60,7 @@ def capture_worker(events,stop,snapshot,target_hwnd,origin_ns,cfg,session_dir,re
         def capture_regions_allowed(rects):
             return not win32gui.IsIconic(target_hwnd) and (win32gui.GetForegroundWindow()==target_hwnd or regions_visible(target_hwnd,rects))
         def cache_result_image(t):
+            nonlocal pending_quality
             shot=None
             try:
                 from .result_archive import RESULT_RECTS,compose_result
@@ -67,8 +68,13 @@ def capture_worker(events,stop,snapshot,target_hwnd,origin_ns,cfg,session_dir,re
                 if not capture_regions_allowed(shot.native):return ''
                 pixels=shot.capture()
                 if not capture_regions_allowed(shot.native):return ''
-                path=Path(session_dir)/f'game_result_{round(t):09d}.png'
-                compose_result(pixels,int(cfg.mode) if cfg.mode!='auto' else 4).save(path)
+                quality=result_brightness([pixels[0],pixels[3]])
+                if pending_result_image and quality<pending_quality-3:return pending_result_image
+                stamp=result_latch.since if result_latch.since is not None else t
+                path=Path(session_dir)/f'game_result_{round(stamp):09d}.png'
+                temporary=path.with_suffix('.pending.png')
+                compose_result(pixels,int(cfg.mode) if cfg.mode!='auto' else 4).save(temporary)
+                temporary.replace(path);pending_quality=quality
                 return str(path)
             except Exception as error:
                 events.put(('info',f'게임 결과 이미지 저장 실패: {error}. 통계는 저장합니다.'))
@@ -90,7 +96,8 @@ def capture_worker(events,stop,snapshot,target_hwnd,origin_ns,cfg,session_dir,re
             active=win32gui.GetForegroundWindow()==target_hwnd and not win32gui.IsIconic(target_hwnd)
             if probe is not None:
                 if restart_probe is not None and restart_probe.is_set():
-                    restart_probe.clear();is_result=False;pending_result_image='';result_latch=ResultLatch();probe_schedule.defer(clock)
+                    restart_probe.clear();is_result=False;pending_result_image='';pending_quality=-1.;refreshed_candidate=False
+                    result_latch=ResultLatch();appearance.reset();probe_schedule.defer(clock)
                 if not active and pending_result_image and not result_latch.saved and not capture_regions_allowed(probe.native) and result_latch.finish_cached((time.perf_counter_ns()-origin_ns)/1e6,True):
                     events.put(('result_screen',result_latch.since,pending_result_image))
                     events.put(('info','RESULT — 알트탭 전에 확보한 결과 화면으로 저장 완료 처리'))
@@ -101,11 +108,16 @@ def capture_worker(events,stop,snapshot,target_hwnd,origin_ns,cfg,session_dir,re
                         patches=probe.capture()
                         if not capture_regions_allowed(probe.native):continue
                         is_result=result_detector.detect_patches(patches)
-                        if is_result!=old_result:events.put(('result_candidate',probe_t,is_result))
+                        ready=appearance.observe(probe_t,is_result,patches)
                         if is_result and result_latch.since is None:
                             pending_result_image=cache_result_image(probe_t)
-                        elif not is_result:pending_result_image=''
-                        if result_latch.observe(probe_t,is_result):
+                            pending_capture_t=probe_t;pending_level=appearance.level;refreshed_candidate=False
+                        elif is_result and not result_latch.saved and not refreshed_candidate and probe_t-pending_capture_t>=500 and appearance.level>pending_level+8:
+                            pending_result_image=cache_result_image(probe_t) or pending_result_image
+                            refreshed_candidate=True
+                        elif not is_result:pending_result_image='';pending_quality=-1.;refreshed_candidate=False
+                        if is_result!=old_result:events.put(('result_candidate',probe_t,is_result,pending_result_image))
+                        if result_latch.observe(probe_t,is_result,ready=ready):
                             # Keep the ordinary settled result image when it is
                             # visible; the earlier copy is only a focus-loss fallback.
                             settled_image=cache_result_image(probe_t) or pending_result_image
