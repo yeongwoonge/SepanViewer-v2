@@ -72,6 +72,7 @@ def main(on_ready=None):
             round_bar=ttk.Frame(self.root,padding=(14,12,14,6));round_bar.pack(fill='x')
             ttk.Button(round_bar,text='초기화 (F5)',command=lambda:self.finish_round('F5 재시작')).pack(side='left')
             ttk.Button(round_bar,text='최근 결과',command=self.show_last_report).pack(side='left',padx=6)
+            ttk.Button(round_bar,text='전체 통계',command=self.show_overall_report).pack(side='left',padx=(0,6))
             ttk.Button(round_bar,text='기록 폴더',command=self.open_records_folder).pack(side='left')
             ttk.Label(self.root,textvariable=self.status,padding=(14,8,14,2),wraplength=800).pack(fill='x')
             ttk.Label(self.root,textvariable=self.round_status,padding=(14,2,14,8),wraplength=800).pack(fill='x')
@@ -298,6 +299,14 @@ def main(on_ready=None):
         def show_last_report(self):
             if self.last_report:self.show_report(self.last_report)
             else:self.round_status.set('저장된 결과가 아직 없습니다. 결과 화면까지 완료하면 저장됩니다.')
+
+        def show_overall_report(self):
+            from sepan.overall_window import open_overall_window
+            window=getattr(self,'overall_window',None)
+            if window is not None and window.winfo_exists():
+                window.deiconify();window.lift();return window
+            self.overall_window=open_overall_window(self,ROOT)
+            return self.overall_window
 
         def show_report(self,folder):
             from PIL import Image,ImageTk

@@ -6,6 +6,7 @@ logs/
 records/
 profiles/
 diagnostics/
+statistics/
 desktop-overlay.json
 config.pending.ini
 *.pending.png

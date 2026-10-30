@@ -10,6 +10,11 @@ from bisect import bisect_left,bisect_right
 def timing_stats(rows,error_key='analysis_error_ms'):
     matched=[r for r in rows if r.get('press') is not None and r.get('due') is not None]
     errors=[r.get(error_key,r['press']-r['due']) for r in matched]
+    return error_stats(errors)
+
+
+def error_stats(errors):
+    errors=list(errors)
     perfect=sum(abs(error)<=42 for error in errors)
     result={'count':len(errors),'mean_ms':None,'median_ms':None,'trimmed_mean_ms':None,'std_ms':None,
             'early':sum(e < -42 for e in errors),'perfect':perfect,'just':perfect,
