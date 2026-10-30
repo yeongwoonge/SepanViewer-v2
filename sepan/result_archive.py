@@ -77,6 +77,20 @@ def match_difficulty_badge(image):
     return scores[0][1] if scores and scores[0][0]>=.88 and (len(scores)==1 or scores[0][0]-scores[1][0]>.12) else ''
 
 
+def title_ocr_image(image):
+    """Separate title letters even when the result animation is still dim."""
+    import cv2,numpy as np
+    from PIL import Image,ImageOps
+    gray=np.asarray(image.crop(TITLE_BOX).convert('L'))
+    if int(gray.max())-int(gray.min())<8:mask=np.full_like(gray,255)
+    else:_,mask=cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
+    title=Image.fromarray(mask)
+    bounds=ImageOps.invert(title).getbbox()
+    if bounds is not None:title=title.crop(bounds)
+    title=title.resize((title.width*2,title.height*2))
+    return ImageOps.expand(title,border=40,fill=255).convert('RGB')
+
+
 def read_result_identity(result_path):
     """No network, service, persistent OCR worker, or full-screen OCR."""
     from PIL import Image,ImageOps
@@ -91,11 +105,7 @@ def read_result_identity(result_path):
             path=Path(directory)/'title.png'
             badge_path=Path(directory)/'difficulty.png'
             with Image.open(result_path) as image:
-                title=image.crop(TITLE_BOX).convert('L').point(lambda value:0 if value>205 else 255)
-                bounds=ImageOps.invert(title).getbbox()
-                if bounds is not None:title=title.crop(bounds)
-                title=title.resize((title.width*2,title.height*2))
-                ImageOps.expand(title,border=40,fill=255).convert('RGB').save(path)
+                title_ocr_image(image).save(path)
                 badge=ImageOps.invert(badge_mask(image.crop(DIFFICULTY_BOX)))
                 bounds=ImageOps.invert(badge).getbbox()
                 if bounds is not None:badge=badge.crop(bounds)
